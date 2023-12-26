@@ -7,17 +7,12 @@ library(tracerer)
 library(ggplot2)
 library(RColorBrewer)
 
-directory <- "/Users/siavashriazi/Desktop/SFU/tree metrics/tree metrics codes/Ireland"
-directory <- "/Users/siavashriazi/Desktop/SFU/tree metrics/tree metrics codes"
-directory <- "/Users/siavashriazi/Desktop/SFU/tree metrics/tree metrics codes/example small"
+directory <- "/Users/siavashriazi/SFU/tree metrics/tree metrics codes"
 
 # set working directory 
 setwd(directory)
 
 file_name = "RSV2"
-file_name = "Ireland_alpha"
-file_name = "Ireland_delta"
-file_name = "small" # a samll made up beast-run from 4 seq each have 4 nucleotide
 
 # reading trees directly from .trees file using read.nexus() from ape package
 beast_trees <- read.nexus(paste(file_name,".trees",sep=""),force.multi = TRUE)
