@@ -7,12 +7,17 @@ library(tracerer)
 library(ggplot2)
 library(RColorBrewer)
 
+directory <- "/Users/siavashriazi/SFU/tree metrics/tree metrics codes/Ireland"
 directory <- "/Users/siavashriazi/SFU/tree metrics/tree metrics codes"
+directory <- "/Users/siavashriazi/SFU/tree metrics/tree metrics codes/example small"
 
 # set working directory 
 setwd(directory)
 
 file_name = "RSV2"
+file_name = "Ireland_alpha"
+file_name = "Ireland_delta"
+file_name = "small" # a samll made up beast-run from 4 seq each have 4 nucleotide
 
 # reading trees directly from .trees file using read.nexus() from ape package
 beast_trees <- read.nexus(paste(file_name,".trees",sep=""),force.multi = TRUE)
@@ -52,7 +57,7 @@ abline(v=50,col='red')
 plot(beast_log$posterior[1:200]~beast_log$Sample[1:200],xlab='Sample',ylab = 'Posterior')
 abline(v=24500,col='red')
 
-initial = 50
+initial = 200
 maxn = 200
 kcmat = sprmat = rfmat = wrfmat = kfmat = pathmat = jrfmat = msdmat = nymat = irfmat = tdmat = likemat = matrix(NA,maxn,maxn)
 
@@ -103,12 +108,32 @@ data <- list(kcmat, sprmat, rfmat, wrfmat, irfmat, jrfmat, kfmat, pathmat, msdma
 # Calculate correlation values
 
 correlations <- sapply(data, function(d) cor(c(likemat), c(d)))
+# Assuming likemat is a vector and each item in data is a matrix of comparisons for a metric
+correlations <- sapply(data, function(d) cor(c(likemat), c(d), method = "spearman"))
 
+names(correlations) <- c("kc","spr", 
+                          "rf","wrf","irf", 
+                          "jrf","kf","path", 
+                          "ms","ny","td")
+# Sort and visualize the correlations
+sorted_cor <- sort(correlations, decreasing = TRUE)
+# Simple bar plot of correlations
+barplot(sorted_cor, las = 2, main = "Correlation with Likelihood", ylab = "Correlation Coefficient", col = 'blue')
 # Create a data frame
-df <- data.frame(Metric = metrics, Correlation = correlations)
+df <- data.frame(Metric = names(correlations), Correlation = correlations)
 
-# Set rownames
-rownames(df) <- df$Metric
+df <- df[order(-df$Correlation),]
+
+# removing the last row (ny)
+df2 <- df %>% filter(row_number() <= n()-1)
+
+df2$Metric <- factor(df2$Metric, levels = df2$Metric)
+
+ggplot(df2, aes(x = Metric, y = Correlation)) + 
+  geom_bar(stat = "identity") + 
+  labs(x = "Metric", y = "Correlation", title = "Correlation Across Metrics") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position = "none")  # Rotate x labels and remove legend
 
 # Remove the Metric column
 #df$Metric <- NULL
@@ -154,11 +179,11 @@ for (i in seq(1,maxn)){
                    MatchingSplitDistance(beast_trees[[i+initial]],beast_trees[[j+initial]])*opt$par[8] +
                    NyeSimilarity(beast_trees[[i+initial]],beast_trees[[j+initial]])*opt$par[9] +
                    InfoRobinsonFoulds(beast_trees[[i+initial]],beast_trees[[j+initial]])*opt$par[10] +
-                   TreeDistance(beast_trees[[i+initial]],beast_trees[[j+initial]])*opt$par[11] + opt$par[12]
+                   TreeDistance(beast_trees[[i+initial]],beast_trees[[j+initial]])*opt$par[11] #+ opt$par[12]
 
   }
 }
-
+weights = data.frame(Metrics = metrics, Weights=opt$par)
 plot(c(likemat)~c(optimat),xlab="Optimized Tree Distance",ylab = "Likelihood")
 cor(c(likemat),c(optimat))
 
@@ -220,6 +245,43 @@ heatmap(msdmat,Colv = NA, Rowv = NA)
 heatmap(nymat,Colv = NA, Rowv = NA)
 heatmap(tdmat,Colv = NA, Rowv = NA)
 
+
+##############
+# Pearson ranked correlation coefficient 
+# Define the model function 
+# Combine all metrics into a single dataframe
+data <- data.frame(like = c(likemat), kc = c(kcmat), spr = c(sprmat), 
+                   rf = c(rfmat), wrf = c(wrfmat), irf = c(irfmat), 
+                   jrf = c(jrfmat), kf = c(kfmat), path = c(pathmat), 
+                   ms = c(msdmat), ny = c(nymat), td = c(tdmat))
+
+predict_likelihood_difference <- function(weights, metrics) {
+  # Calculate the weighted sum of metrics
+  prediction <- as.matrix(metrics) %*% weights
+  return(prediction)
+}
+
+# Define the optimization function
+optimize_correlation <- function(weights) {
+  metrics <- data[, -1] # Exclude the 'like' column
+  predictions <- predict_likelihood_difference(weights, metrics)
+  # Calculate Spearman's rank correlation
+  corr <- cor(data$like, predictions, method = "spearman")
+  # Return negative correlation because optim() minimizes
+  return(-corr)
+}
+
+# Initial weights
+initial_weights <- rep(1, ncol(data) - 1) # Assuming starting with equal weights
+
+# Optimize
+result <- optim(initial_weights, optimize_correlation, method = "BFGS")
+
+# Optimized weights
+optimized_weights <- result$par
+
+# Check the results
+optimized_weights
 #https://thibautjombart.github.io/treespace/articles/DengueVignette.html
 #######################################
 
